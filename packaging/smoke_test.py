@@ -13,6 +13,7 @@ repository root (on Linux, inside xvfb-run when there is no display):
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -20,6 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+os.environ.setdefault("WA2HTML_TEST_TIMEOUT", "0")  # the test-suite hang guard; this script has its own timeouts
 
 from tests.helpers import IOS_CHAT, IOS_FILES, make_zip  # noqa: E402
 
