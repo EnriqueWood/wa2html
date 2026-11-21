@@ -1,0 +1,31 @@
+# Never commit real chats or anything generated from them.
+*.zip
+*.html
+!wa2html/assets/*.html
+*.opus
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.mp4
+*.was
+*.vcf
+_chat.txt
+WhatsApp Chat*
+output/
+private/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

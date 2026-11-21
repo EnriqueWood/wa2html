@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="{{LANG}}" data-theme="{{THEME}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data: blob: file:; media-src 'self' data: blob: file:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src data: blob:; font-src data:">
+<meta name="referrer" content="no-referrer">
+<meta name="generator" content="wa2html {{VERSION}}">
+<title>{{TITLE}}</title>
+<script>(function(){try{var s=JSON.parse(localStorage.getItem("wa2html:{{CHAT_KEY}}")||"{}");if(s.theme)document.documentElement.setAttribute("data-theme",s.theme);}catch(e){}})();</script>
+<style>
+{{CSS}}
+</style>
+</head>
+<body>
+<div id="wall" class="pattern" aria-hidden="true"></div>
+<header class="topbar">
+  <div class="bar">
+    <div class="avatar">{{AVATAR}}</div>
+    <div class="who">
+      <h1 class="title">{{TITLE}}</h1>
+      <div class="subtitle">{{SUBTITLE}}</div>
+    </div>
+    <div class="actions">
+      <button type="button" class="icon-btn" id="btn-search" title="{{T_search}}" aria-label="{{T_search}}" data-i18n-title="search">{{I_search}}</button>
+      <button type="button" class="icon-btn" id="btn-date" title="{{T_jumpToDate}}" aria-label="{{T_jumpToDate}}" data-i18n-title="jumpToDate">{{I_calendar}}</button>
+      <button type="button" class="icon-btn" id="btn-settings" title="{{T_settings}}" aria-label="{{T_settings}}" data-i18n-title="settings">{{I_palette}}</button>
+      <button type="button" class="icon-btn" id="btn-info" title="{{T_info}}" aria-label="{{T_info}}" data-i18n-title="info">{{I_info}}</button>
+    </div>
+  </div>
+  <div class="searchbar" id="searchbar" hidden>
+    <input type="search" id="search-input" placeholder="{{T_searchPlaceholder}}" data-i18n-ph="searchPlaceholder" autocomplete="off" spellcheck="false">
+    <span class="search-count" id="search-count" aria-live="polite"></span>
+    <button type="button" class="icon-btn small" id="search-prev" title="{{T_prev}}" aria-label="{{T_prev}}" data-i18n-title="prev">{{I_up}}</button>
+    <button type="button" class="icon-btn small" id="search-next" title="{{T_next}}" aria-label="{{T_next}}" data-i18n-title="next">{{I_down}}</button>
+    <button type="button" class="icon-btn small" id="search-close" title="{{T_close}}" aria-label="{{T_close}}" data-i18n-title="close">{{I_close}}</button>
+  </div>
+  <div class="datebar" id="datebar" hidden>
+    <label><span data-i18n="jumpToDate">{{T_jumpToDate}}</span> <input type="date" id="date-input"></label>
+    <button type="button" class="icon-btn small" id="date-close" title="{{T_close}}" aria-label="{{T_close}}" data-i18n-title="close">{{I_close}}</button>
+  </div>
+</header>
+
+<main id="chat" class="chat">
+{{MESSAGES}}
+</main>
+
+<div class="fab" id="fab">
+  <button type="button" class="icon-btn" id="go-top" title="{{T_top}}" aria-label="{{T_top}}" data-i18n-title="top">{{I_up}}</button>
+  <button type="button" class="icon-btn" id="go-bottom" title="{{T_bottom}}" aria-label="{{T_bottom}}" data-i18n-title="bottom">{{I_down}}</button>
+</div>
+<div class="loading" id="loading" data-i18n="loadingMedia">{{T_loadingMedia}}</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="panel" id="panel-settings" hidden aria-labelledby="settings-title">
+  <div class="panel-head"><h2 id="settings-title" data-i18n="settings">{{T_settings}}</h2>
+    <button type="button" class="icon-btn" data-close title="{{T_close}}" aria-label="{{T_close}}" data-i18n-title="close">{{I_close}}</button></div>
+  <div class="panel-body">
+    <div class="field"><span class="label" data-i18n="whoAmI"></span><select id="set-me"></select></div>
+    <div class="field"><span class="label" data-i18n="theme"></span>
+      <div class="seg" id="set-theme"><button type="button" data-v="auto" data-i18n="themeAuto"></button><button type="button" data-v="light" data-i18n="themeLight"></button><button type="button" data-v="dark" data-i18n="themeDark"></button></div></div>
+    <div class="field col"><span class="label" data-i18n="wallpaper"></span>
+      <div class="swatches" id="set-wall"></div>
+      <label class="check"><input type="checkbox" id="set-pattern"> <span data-i18n="pattern"></span></label>
+      <label class="filebtn"><input type="file" accept="image/*" id="set-wall-file"><span data-i18n="wallpaperImage"></span></label>
+      <p class="hint" id="wall-msg" hidden></p>
+      <label class="range"><span data-i18n="wallpaperDim"></span><input type="range" id="set-dim" min="0" max="70" step="5"></label></div>
+    <div class="field col"><span class="label" data-i18n="myBubble"></span><div class="swatches small" id="set-out"></div></div>
+    <div class="field col"><span class="label" data-i18n="theirBubble"></span><div class="swatches small" id="set-in"></div></div>
+    <div class="field"><span class="label" data-i18n="fontSize"></span><input type="range" id="set-font" min="12" max="24" step="1"></div>
+    <div class="field"><span class="label" data-i18n="timeFormat"></span>
+      <div class="seg" id="set-time"><button type="button" data-v="12" data-i18n="time12"></button><button type="button" data-v="24" data-i18n="time24"></button></div></div>
+    <div class="field"><span class="label" data-i18n="language"></span><select id="set-lang"></select></div>
+    <div class="field"><label class="check"><input type="checkbox" id="set-sys"> <span data-i18n="showSystem"></span></label></div>
+    <button type="button" class="btn ghost" id="set-reset" data-i18n="reset"></button>
+  </div>
+</aside>
+<aside class="panel" id="panel-info" hidden aria-labelledby="info-title">
+  <div class="panel-head"><h2 id="info-title" data-i18n="info">{{T_info}}</h2>
+    <button type="button" class="icon-btn" data-close title="{{T_close}}" aria-label="{{T_close}}" data-i18n-title="close">{{I_close}}</button></div>
+  <div class="panel-body">
+    <div class="info-head"><div class="avatar big">{{AVATAR}}</div><div class="title">{{TITLE}}</div></div>
+    {{INFO}}
+  </div>
+</aside>
+
+<div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true">
+  <div class="lb-bar">
+    <span class="lb-meta" id="lb-meta"></span>
+    <a class="icon-btn" id="lb-download" href="#" title="{{T_download}}" aria-label="{{T_download}}" data-i18n-title="download">{{I_download}}</a>
+    <button type="button" class="icon-btn" id="lb-close" title="{{T_close}}" aria-label="{{T_close}}" data-i18n-title="close">{{I_close}}</button>
+  </div>
+  <button type="button" class="icon-btn lb-nav prev" id="lb-prev" title="{{T_prev}}" aria-label="{{T_prev}}" data-i18n-title="prev">{{I_left}}</button>
+  <img id="lb-img" alt="">
+  <button type="button" class="icon-btn lb-nav next" id="lb-next" title="{{T_next}}" aria-label="{{T_next}}" data-i18n-title="next">{{I_right}}</button>
+</div>
+
+<script type="application/json" id="wa-config">{{CONFIG}}</script>
+{{TRANSCRIPT}}
+{{LOTTIE_DATA}}
+{{LOTTIE_LIB}}
+<script>
+{{JS}}
+</script>
+<!--MEDIA-->
+</body>
+</html>
