@@ -201,17 +201,34 @@ class CommandLine(unittest.TestCase):
         self.assertIn("1 missing", out)
         self.assertFalse((self.tmp / "WhatsApp Chat - Bob.html").exists())
 
-    def test_default_output_and_no_overwrite(self):
+    def test_default_output_never_overwrites(self):
         code, out = self.run_cli(self.zip)
         self.assertEqual(code, 0, out)
         self.assertIn("Verified", out)
         page = self.tmp / "WhatsApp Chat - Bob.html"
         self.assertTrue(page.exists())
+        before = page.stat().st_mtime_ns
         code, out = self.run_cli(self.zip)
-        self.assertEqual(code, 1)
-        self.assertIn("already exists", out)
+        self.assertEqual(code, 0, out)
+        self.assertTrue((self.tmp / "WhatsApp Chat - Bob (2).html").exists())
+        self.assertEqual(page.stat().st_mtime_ns, before)
         code, _ = self.run_cli(self.zip, "--force", "--me", "Bob", "--theme", "dark")
         self.assertEqual(code, 0)
+        self.assertFalse((self.tmp / "WhatsApp Chat - Bob (3).html").exists())
+
+    def test_explicit_output_is_not_overwritten(self):
+        target = self.tmp / "out.html"
+        target.write_text("keep me", encoding="utf-8")
+        code, out = self.run_cli(self.zip, "-o", target)
+        self.assertEqual(code, 1)
+        self.assertIn("already exists", out)
+        self.assertEqual(target.read_text(encoding="utf-8"), "keep me")
+
+    def test_not_interactive_outside_frozen_windows_builds(self):
+        self.assertFalse(cli.launched_by_double_click())
+        code, out = self.run_cli()
+        self.assertEqual(code, 2)  # argparse: missing input
+        self.assertIn("usage", out)
 
     def test_bad_input(self):
         bogus = self.tmp / "notes.md"

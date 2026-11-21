@@ -385,6 +385,7 @@ def build_chat(
     title: Optional[str] = None,
     me: Optional[str] = None,
     date_order: str = "auto",
+    probe_media: bool = True,
 ) -> Chat:
     raw = source.read_transcript()
     text, encoding = _decode_transcript(raw)
@@ -447,8 +448,9 @@ def build_chat(
         if msg.kind == "omitted":
             omitted[msg.omitted] += 1
 
-    for item in media.values():
-        _probe_media(item, source)
+    if probe_media:  # reads every file; skipped for a quick preview
+        for item in media.values():
+            _probe_media(item, source)
 
     if transcript.format.date_order_guessed:
         warnings.append(

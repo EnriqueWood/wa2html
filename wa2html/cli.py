@@ -1,46 +1,38 @@
-"""Command line interface: ``wa2html CHAT.zip``."""
+"""Command line interface: ``wa2html CHAT.zip``.
+
+Without arguments the standalone executables open the window instead
+(see wa2html.gui); so does ``wa2html --gui``.
+"""
 
 from __future__ import annotations
 
 import argparse
-import mimetypes
 import sys
-from collections import Counter
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple
+from typing import Optional, Sequence
 
 from . import __version__
-from .chat import Chat, build_chat
-from .parser import TranscriptFormatError
-from .render import RenderOptions, render
-from .source import ExportError, ExportSource
-from .verify import verify_page
+from .convert import Job, default_output, free_path, read_image, report, run_job  # noqa: F401 (re-exported)
+from .render import RenderOptions
 
-SINGLE_FILE_WARN = 500 * 1024 * 1024
+DRAG_AND_DROP_HELP = """\
+This is the command-line version of wa2html. For the window, download
+wa2html-windows-x64.exe from https://github.com/EnriqueWood/wa2html/releases/latest
 
+Esta es la version de linea de comandos de wa2html. Para la ventana, descarga
+wa2html-windows-x64.exe desde https://github.com/EnriqueWood/wa2html/releases/latest
 
-def _image_arg(path: Optional[str]) -> Optional[Tuple[bytes, str]]:
-    if not path:
-        return None
-    file = Path(path)
-    mime = mimetypes.guess_type(file.name)[0] or ""
-    if not mime.startswith("image/"):
-        raise SystemExit(f"error: {path} does not look like an image")
-    return file.read_bytes(), mime
-
-
-def default_output(source: Path, mode: str) -> Path:
-    base = source.with_suffix("") if source.is_file() else source
-    if mode == "folder":
-        return base.parent / (base.name + " (viewer)")
-    return base.parent / (base.name + ".html")
+You can also drag the .zip exported from WhatsApp onto this program: the page
+is saved next to the .zip. All options: run it with --help in a terminal.
+"""
 
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="wa2html",
         description="Turn a WhatsApp chat export into a WhatsApp-style HTML page with "
-        "playable voice notes, photos, stickers and videos. The export is only read, never changed.",
+        "playable voice notes, photos, stickers and videos. The export is only read, never changed. "
+        "Run with --gui (or, for the downloadable programs, without arguments) to use the window.",
     )
     p.add_argument("input", help="the .zip exported by WhatsApp, the folder it was extracted to, or the chat .txt")
     p.add_argument("-o", "--output", help="output .html file (or folder, with --mode folder)")
@@ -58,6 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="skip re-reading the result to check that every file and message made it in",
     )
+    p.add_argument("--gui", action="store_true", help="open the window (optionally with INPUT already chosen)")
     g = p.add_argument_group("chat")
     g.add_argument("--me", metavar="NAME", help="your name as it appears in the chat (shown on the right)")
     g.add_argument("--title", help="chat title (default: taken from the file name)")
@@ -68,7 +61,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="order of day, month and year in the transcript (default: detected)",
     )
     g = p.add_argument_group("appearance (all can also be changed later in the page)")
-    g.add_argument("--lang", default="auto", help="interface language: auto, en or es (default: auto)")
+    g.add_argument(
+        "--lang",
+        default="auto",
+        help="default language of the page: auto (the reader's browser), en, es, pt, fr, de or it",
+    )
     g.add_argument("--theme", choices=("auto", "light", "dark"), default="auto")
     g.add_argument("--time-format", choices=("auto", "12", "24"), default="auto")
     g.add_argument("--wallpaper", default="default", help="'default' or a CSS colour/gradient, e.g. '#dfe7ec'")
@@ -80,123 +77,132 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def _plural(n: int, word: str) -> str:
-    return f"{n:,} {word}" + ("" if n == 1 else "s")
+def launched_by_double_click() -> bool:
+    """True when Windows opened a console just for this program.
+
+    That happens when the .exe is double-clicked or a file is dropped on it.
+    A console opened by a shell also lists the shell process.
+    """
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        return False
+    try:
+        if not sys.stdin.isatty():
+            return False
+        import ctypes
+
+        processes = (ctypes.c_uint * 8)()
+        count = ctypes.windll.kernel32.GetConsoleProcessList(processes, 8)  # type: ignore[attr-defined]
+        # A one-file PyInstaller program runs as two processes: bootloader and Python.
+        return 0 < count <= 2
+    except Exception:  # pragma: no cover - best effort only
+        return False
 
 
-def report(chat: Chat) -> List[str]:
-    lines = []
-    lines.append(f"Source        {chat.source_name}")
-    lines.append(f"Transcript    {chat.transcript_name}: {chat.line_count:,} lines, {chat.format.describe()}")
-    kinds = Counter(m.kind for m in chat.messages)
-    real = len(chat.messages) - kinds.get("system", 0)
-    lines.append(
-        f"Messages      {real:,} (+{kinds.get('system', 0)} WhatsApp notices); every line of the transcript is accounted for"
-    )
-    if chat.first_timestamp and chat.last_timestamp:
-        lines.append(f"Period        {chat.first_timestamp:%Y-%m-%d %H:%M} -> {chat.last_timestamp:%Y-%m-%d %H:%M}")
-    me = next((s.name for s in chat.senders if s.id == chat.me), None)
-    people = ", ".join(f"{s.name} ({s.count:,})" for s in chat.senders)
-    lines.append(f"Participants  {people}")
-    lines.append(f"Shown right   {me or 'nobody'}" + (f"  [{chat.me_reason}]" if me else ""))
-    by_kind = Counter(item.kind for item in chat.media.values())
-    referenced = sum(1 for m in chat.messages if m.attachment)
-    lines.append(
-        f"Attachments   {referenced:,} mentioned, {referenced - len(chat.missing):,} found, {len(chat.missing):,} missing"
-    )
-    if by_kind:
-        lines.append("              in the export: " + ", ".join(f"{n:,} {k}" for k, n in by_kind.most_common()))
-    if chat.omitted:
-        lines.append(
-            "Not exported  " + ", ".join(f"{n:,} {k}" for k, n in chat.omitted.most_common())
-            + "  (WhatsApp wrote 'omitted': the file was not on the phone when exporting)"
-        )
-    if chat.unreferenced:
-        lines.append(f"Extra files   {_plural(len(chat.unreferenced), 'file')} in the export that no message mentions (shown at the end)")
-    for _, name in chat.missing[:20]:
-        lines.append(f"  missing: {name}")
-    if len(chat.missing) > 20:
-        lines.append(f"  ... and {len(chat.missing) - 20} more")
-    return lines
+def _hide_own_console() -> None:
+    """Hide the console Windows opened for us (never a terminal the user opened)."""
+    try:
+        import ctypes
+
+        window = ctypes.windll.kernel32.GetConsoleWindow()  # type: ignore[attr-defined]
+        if window:
+            ctypes.windll.user32.ShowWindow(window, 0)  # type: ignore[attr-defined]
+    except Exception:  # pragma: no cover - cosmetic
+        pass
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def _pause() -> None:
+    try:
+        input("\nPress Enter to close this window / Presiona Enter para cerrar esta ventana...")
+    except (EOFError, KeyboardInterrupt):
+        pass
+
+
+def _print_log(level: str, text: str) -> None:
+    if level == "error":
+        print(f"error: {text}", file=sys.stderr)
+    elif level == "warning":
+        print(f"warning: {text}")
+    else:
+        print(text)
+
+
+def main(argv: Optional[Sequence[str]] = None, allow_window: bool = True) -> int:
+    """Run the command line.
+
+    `allow_window=False` (the Windows command-line executable) only opens the
+    window when asked with --gui; the other executables open it when started
+    without arguments, e.g. by a double-click.
+    """
     for stream in (sys.stdout, sys.stderr):
         try:
             stream.reconfigure(errors="replace")  # type: ignore[attr-defined]
         except (AttributeError, ValueError):
             pass
-    args = build_parser().parse_args(argv)
-    source_path = Path(args.input)
+    args_list = sys.argv[1:] if argv is None else [str(a) for a in argv]
 
+    if args_list[:1] == ["--gui-selftest"]:  # used by the release workflow on each executable
+        from .gui import selftest
+
+        return selftest(Path(args_list[1]))
+
+    double_click = launched_by_double_click()
+    frozen = getattr(sys, "frozen", False)
+    want_gui = "--gui" in args_list or (
+        allow_window and ((double_click and len(args_list) <= 1) or (frozen and not args_list))
+    )
+    if want_gui:
+        from .gui import open_window
+
+        initial = next((Path(a) for a in args_list if a != "--gui"), None)
+        if double_click:
+            _hide_own_console()
+        code = open_window(initial)
+        if code is not None:
+            return code
+        # No window possible (no display or no Tk): carry on as a console program.
+
+    if double_click and not args_list:
+        print(DRAG_AND_DROP_HELP)
+        _pause()
+        return 0
     try:
-        source = ExportSource(source_path)
-    except ExportError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
+        code = run([a for a in args_list if a != "--gui"])
+    except SystemExit as exc:  # argparse errors, --help, --version
+        code = exc.code if isinstance(exc.code, int) else 1
+    if double_click:
+        _pause()
+    return code
 
-    with source:
-        try:
-            chat = build_chat(source, title=args.title, me=args.me, date_order=args.date_order)
-        except (TranscriptFormatError, ValueError) as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return 2
 
-        print(f"wa2html {__version__}")
-        for line in report(chat):
-            print(line)
-        for warning in chat.warnings:
-            print(f"warning: {warning}")
-        if args.check:
-            return 0
-
-        output = Path(args.output) if args.output else default_output(source_path, args.mode)
-        target = output / "index.html" if args.mode == "folder" else output
-        if target.exists() and not args.force:
-            print(f"error: {target} already exists (use --force to overwrite)", file=sys.stderr)
-            return 1
-        if args.mode == "single":
-            total = sum(item.size for item in chat.media.values())
-            if total * 4 // 3 > SINGLE_FILE_WARN:
-                print(
-                    f"warning: the page will be about {total * 4 // 3 // (1024 * 1024):,} MB; browsers may be slow "
-                    "to open it. Consider --mode folder."
-                )
-
+def run(argv: Sequence[str]) -> int:
+    args = build_parser().parse_args(argv)
+    try:
         options = RenderOptions(
-            mode=args.mode,
             lang=args.lang,
             theme=args.theme,
             time_format=args.time_format,
             wallpaper=args.wallpaper,
             pattern=not args.no_pattern,
-            wallpaper_image=_image_arg(args.wallpaper_image),
-            avatar=_image_arg(args.avatar),
+            wallpaper_image=read_image(args.wallpaper_image),
+            avatar=read_image(args.avatar),
             lottie_js=args.lottie_js,
         )
-        result = render(chat, source, output, options)
-
-    for warning in result.warnings:
-        print(f"warning: {warning}")
-    if result.messages_rendered != len(chat.messages):  # pragma: no cover - safety net
-        print(f"error: rendered {result.messages_rendered} of {len(chat.messages)} messages", file=sys.stderr)
-        return 1
-    size_mb = result.bytes_written / (1024 * 1024)
-    extra = f" + {result.media_files:,} files in media/" if result.media_files else ""
-    print(f"Written       {result.path} ({size_mb:,.1f} MB{extra})")
-    if args.no_verify:
-        return 0
-    check = verify_page(chat, result.path, args.mode)
-    if not check.ok:
-        for problem in check.problems:
-            print(f"error: {problem}", file=sys.stderr)
-        print("error: verification FAILED; keep using the original export", file=sys.stderr)
-        return 1
-    print(
-        f"Verified      all {len(chat.messages):,} messages, the original transcript and "
-        f"{check.files_checked:,} files are in the result, identical to the export"
+    except (ValueError, OSError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    job = Job(
+        input=Path(args.input),
+        output=Path(args.output) if args.output else None,
+        mode=args.mode,
+        check_only=args.check,
+        force=args.force,
+        verify=not args.no_verify,
+        me=args.me,
+        title=args.title,
+        date_order=args.date_order,
+        options=options,
     )
-    return 0
+    return run_job(job, _print_log).code
 
 
 if __name__ == "__main__":  # pragma: no cover

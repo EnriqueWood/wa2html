@@ -1,29 +1,43 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "wa2html"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Turn a WhatsApp chat export (.zip) into one self-contained, WhatsApp-style HTML file with playable voice notes, stickers, photos and videos."
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE", "wa2html/assets/vendor/LICENSE-lottie-web.md"]
 dependencies = []
 keywords = ["whatsapp", "chat", "export", "archive", "html", "viewer"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Topic :: Communications :: Chat",
     "Topic :: System :: Archiving",
 ]
 
+[project.urls]
+Homepage = "https://github.com/EnriqueWood/wa2html"
+Download = "https://github.com/EnriqueWood/wa2html/releases/latest"
+Issues = "https://github.com/EnriqueWood/wa2html/issues"
+
 [project.scripts]
 wa2html = "wa2html.cli:main"
 
+[project.gui-scripts]
+wa2html-gui = "wa2html.gui:main"
+
 [tool.setuptools]
-packages = ["wa2html"]
+# The asset folders hold no Python code; they are listed so their files ship as package data.
+packages = ["wa2html", "wa2html.assets", "wa2html.assets.vendor", "wa2html.locales"]
+
+[tool.setuptools.dynamic]
+version = { attr = "wa2html.__version__" }
 
 [tool.setuptools.package-data]
-wa2html = ["assets/*", "assets/vendor/*"]
+"wa2html.assets" = ["*"]
+"wa2html.assets.vendor" = ["*"]
+"wa2html.locales" = ["*.json"]

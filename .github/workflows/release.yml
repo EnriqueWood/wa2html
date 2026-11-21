@@ -1,0 +1,138 @@
+# Builds standalone executables for Windows, Linux and macOS and publishes
+# them as a GitHub release when a version tag (v1.2.3) is pushed.
+# Running it by hand (Actions tab -> Release -> Run workflow) only builds and
+# smoke-tests the executables; they are kept as workflow artifacts.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+  PYINSTALLER_VERSION: "6.22.3"
+
+jobs:
+  tests:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    name: Build ${{ matrix.asset }}
+    needs: tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows: the window-only program most people want (no console at all)...
+          - os: windows-latest
+            asset: wa2html-windows-x64.exe
+            binary: wa2html.exe
+            entry: packaging/wa2html_gui.py
+            pyinstaller_args: --windowed --icon build/wa2html.ico
+            smoke_args: --gui-only
+          # ...and the command-line program, for terminals and scripts.
+          - os: windows-latest
+            asset: wa2html-cli-windows-x64.exe
+            binary: wa2html.exe
+            entry: packaging/wa2html_cli_windows.py
+            pyinstaller_args: --icon build/wa2html.ico
+            smoke_args: ""
+          # Linux and macOS: one program; started without arguments it opens the window.
+          # An older Ubuntu keeps the binary compatible with older Linux distributions (glibc).
+          - os: ubuntu-22.04
+            asset: wa2html-linux-x64
+            binary: wa2html
+            entry: packaging/wa2html_cli.py
+            pyinstaller_args: ""
+            smoke_args: ""
+          # Apple Silicon. Intel Macs can run wa2html with Python (see README).
+          - os: macos-latest
+            asset: wa2html-macos-arm64
+            binary: wa2html
+            entry: packaging/wa2html_cli.py
+            pyinstaller_args: ""
+            smoke_args: ""
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Check that the tag matches the package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(python -c "import wa2html; print(wa2html.__version__)")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match wa2html.__version__ $version"
+            exit 1
+          fi
+
+      - name: Install wa2html and PyInstaller
+        run: python -m pip install . "pyinstaller==$PYINSTALLER_VERSION"
+
+      - name: Check that Tk (for the window) is available
+        run: python -c "import tkinter; print('Tk', tkinter.TkVersion)"
+
+      - name: Icon
+        run: python packaging/make_icon.py build/wa2html.ico
+
+      - name: Build the executable
+        run: >
+          pyinstaller --onefile --name wa2html --collect-data wa2html
+          ${{ matrix.pyinstaller_args }}
+          --noconfirm --clean ${{ matrix.entry }}
+
+      - name: Virtual display for the window test (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Smoke test
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a python packaging/smoke_test.py "dist/${{ matrix.binary }}" ${{ matrix.smoke_args }}
+          else
+            python packaging/smoke_test.py "dist/${{ matrix.binary }}" ${{ matrix.smoke_args }}
+          fi
+
+      - name: Rename
+        run: mv "dist/${{ matrix.binary }}" "dist/${{ matrix.asset }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    name: Publish the release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum wa2html-* > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" dist/*
+          --repo "$GITHUB_REPOSITORY"
+          --title "wa2html $GITHUB_REF_NAME"
+          --generate-notes
