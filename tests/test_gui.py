@@ -11,7 +11,7 @@ from unittest import mock
 from wa2html import gui, i18n, icon
 from wa2html.convert import preview_export
 
-from .helpers import IOS_CHAT, IOS_FILES, make_zip
+from .helpers import IOS_CHAT, IOS_FILES, make_zip, png
 
 
 def make_root():
@@ -87,6 +87,8 @@ class Window(unittest.TestCase):
 
     def tearDown(self):
         self.env.stop()
+        for job in self.root.tk.call("after", "info"):  # pending callbacks of the windows under test
+            self.root.after_cancel(job)
         self.root.destroy()
         self._tmp.cleanup()
 
@@ -100,7 +102,7 @@ class Window(unittest.TestCase):
         self.fail("timed out")
 
     def test_choose_then_create(self):
-        app = gui.App(self.root, lang="es")
+        app = gui.App(self.root, lang="es", popups=False)
         self.assertEqual(str(app.create_button["state"]), "disabled")
         self.assertEqual(app.input_name["text"], i18n.app_text("es")["no_file"])
         app.set_input(self.zip)
@@ -124,7 +126,7 @@ class Window(unittest.TestCase):
         self.assertIn('"me":"s1"', page)  # Bob on the right
 
     def test_language_switch_keeps_state(self):
-        app = gui.App(self.root, lang="en")
+        app = gui.App(self.root, lang="en", popups=False)
         app.set_input(self.zip)
         self.wait(lambda: not app.busy)
         app.mode = "folder"
@@ -139,16 +141,78 @@ class Window(unittest.TestCase):
         self.assertFalse(gui.settings_path().exists())  # tests pass a language: nothing saved
 
     def test_language_choice_is_remembered(self):
-        app = gui.App(self.root)  # no language given: uses and saves the settings
+        app = gui.App(self.root, popups=False)  # no language given: uses and saves the settings
         app.set_language("de" if app.lang != "de" else "it")
         saved = json.loads(gui.settings_path().read_text(encoding="utf-8"))["lang"]
         self.assertEqual(saved, app.lang)
         self.root.destroy()
         self.root = make_root()
-        self.assertEqual(gui.App(self.root).lang, saved)
+        self.assertEqual(gui.App(self.root, popups=False).lang, saved)
+
+    def test_completion_message(self):
+        app = gui.App(self.root, lang="es", popups=False)
+        app.set_input(self.zip)
+        self.wait(lambda: not app.busy)
+        app.create()
+        self.wait(lambda: app.outcome is not None)
+        title, text, ok = app.completion_message()
+        t = i18n.app_text("es")
+        self.assertTrue(ok)
+        self.assertEqual(title, t["done_title"])
+        self.assertIn("WhatsApp Chat - Bob.html", text)
+        self.assertIn(t["done_checked"].format(messages="23", files="10"), text)
+        self.assertIn(t["done_omitted"].format(n="2"), text)
+        self.assertIn(t["done_missing_1"], text)  # singular for one file
+        self.assertTrue(text.endswith(t["ask_open"]))
+        # A failed run says so, with the reason.
+        app.outcome = gui.Outcome(1, error="verification FAILED; keep using the original export")
+        title, text, ok = app.completion_message()
+        self.assertFalse(ok)
+        self.assertEqual(title, t["fail_title"])
+        self.assertIn("verification FAILED", text)
+
+    def test_announce_shows_a_dialog(self):
+        app = gui.App(self.root, lang="en")
+        app.outcome = gui.Outcome(1, error="boom")
+        with mock.patch("tkinter.messagebox.showerror") as showerror:
+            app._announce()
+        showerror.assert_called_once()
+        self.assertIn("boom", showerror.call_args[0][1])
+
+    def test_both_photos(self):
+        theirs, mine = self.tmp / "bob.png", self.tmp / "me.png"
+        theirs.write_bytes(png(6, 6))
+        mine.write_bytes(png(7, 7))
+        app = gui.App(self.root, lang="es", popups=False)
+        t = i18n.app_text("es")
+        self.assertEqual(app.photo_title["text"], t["photo_plain"])
+        app.set_input(self.zip)
+        self.wait(lambda: not app.busy)
+        self.assertEqual(app.photo_title["text"], t["photo"].format(name="Bob"))
+        self.assertEqual(app.my_photo_title["text"], t["my_photo"].format(name="Alice"))
+        app.avatar = theirs
+        app.set_my_avatar(mine)
+        self.assertEqual(app.my_avatar_label["text"], "me.png")
+        app.create()
+        self.wait(lambda: app.outcome is not None)
+        self.assertTrue(app.outcome.verified)
+        page = app.outcome.page.read_text(encoding="utf-8")
+        self.assertIn('.msg[data-s="s0"] .v-avatar:not(.music) { background: var(--my-avatar)', page)
+        self.assertIn('.msg[data-s="s1"] .v-avatar:not(.music) { background: var(--chat-avatar)', page)
+        self.assertFalse(gui.settings_path().exists())  # tests pass a language: nothing saved
+
+    def test_owner_photo_is_remembered(self):
+        mine = self.tmp / "me.png"
+        mine.write_bytes(png(7, 7))
+        app = gui.App(self.root, popups=False)
+        app.set_my_avatar(mine)
+        self.assertEqual(gui.load_settings()["my_avatar"], str(mine))
+        self.assertEqual(gui.App(self.root, popups=False).my_avatar, mine)
+        app.remove_my_avatar()
+        self.assertNotIn("my_avatar", gui.load_settings())
 
     def test_bad_input(self):
-        app = gui.App(self.root, lang="en")
+        app = gui.App(self.root, lang="en", popups=False)
         bogus = self.tmp / "notes.md"
         bogus.write_text("hello", encoding="utf-8")
         app.set_input(bogus)

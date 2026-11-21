@@ -71,7 +71,8 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--wallpaper", default="default", help="'default' or a CSS colour/gradient, e.g. '#dfe7ec'")
     g.add_argument("--wallpaper-image", metavar="IMAGE", help="an image to use as wallpaper")
     g.add_argument("--no-pattern", action="store_true", help="no doodle pattern over the wallpaper")
-    g.add_argument("--avatar", metavar="IMAGE", help="a picture for the chat header")
+    g.add_argument("--avatar", metavar="IMAGE", help="the contact's picture: chat header and their voice messages")
+    g.add_argument("--my-avatar", metavar="IMAGE", help="your own picture, for your voice messages")
     g.add_argument("--lottie-js", metavar="FILE", help="lottie-web build to embed for animated (.was) stickers")
     p.add_argument("--version", action="version", version=f"wa2html {__version__}")
     return p
@@ -185,6 +186,7 @@ def run(argv: Sequence[str]) -> int:
             pattern=not args.no_pattern,
             wallpaper_image=read_image(args.wallpaper_image),
             avatar=read_image(args.avatar),
+            my_avatar=read_image(args.my_avatar),
             lottie_js=args.lottie_js,
         )
     except (ValueError, OSError) as exc:

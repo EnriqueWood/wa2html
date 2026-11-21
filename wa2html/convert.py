@@ -152,9 +152,33 @@ class Outcome:
     code: int  # 0 ok, 1 failed, 2 unreadable input
     page: Optional[Path] = None
     verified: bool = False
+    messages: int = 0
+    files: int = 0  # files of the export checked in the result
+    size: int = 0  # bytes of the page (plus media/ in folder mode)
+    omitted: int = 0  # media WhatsApp left out of the export
+    missing: int = 0  # files mentioned but not in the export
+    error: str = ""  # the last error, for the window
+
+
+def _folder_size(folder: Path) -> int:
+    return sum(f.stat().st_size for f in folder.rglob("*") if f.is_file())
 
 
 def run_job(job: Job, log: Log) -> Outcome:
+    errors: List[str] = []
+
+    def emit(level: str, text: str) -> None:
+        if level == "error":
+            errors.append(text)
+        log(level, text)
+
+    outcome = _run_job(job, emit)
+    if errors and not outcome.error:
+        outcome.error = errors[-1]
+    return outcome
+
+
+def _run_job(job: Job, log: Log) -> Outcome:
     try:
         source = ExportSource(job.input)
     except ExportError as exc:
@@ -206,17 +230,28 @@ def run_job(job: Job, log: Log) -> Outcome:
     size_mb = result.bytes_written / (1024 * 1024)
     extra = f" + {result.media_files:,} files in media/" if result.media_files else ""
     log("info", f"Written       {result.path} ({size_mb:,.1f} MB{extra})")
+    outcome = Outcome(
+        0,
+        result.path,
+        messages=sum(1 for m in chat.messages if m.kind != "system"),
+        size=_folder_size(result.path.parent) if job.mode == "folder" else result.bytes_written,
+        omitted=sum(chat.omitted.values()),
+        missing=len(chat.missing),
+    )
     if not job.verify:
-        return Outcome(0, result.path)
+        return outcome
     check = verify_page(chat, result.path, job.mode)
+    outcome.files = check.files_checked
     if not check.ok:
         for problem in check.problems:
             log("error", problem)
         log("error", "verification FAILED; keep using the original export")
-        return Outcome(1, result.path)
+        outcome.code = 1
+        return outcome
     log(
         "info",
         f"Verified      all {len(chat.messages):,} messages, the original transcript and "
         f"{check.files_checked:,} files are in the result, identical to the export",
     )
-    return Outcome(0, result.path, verified=True)
+    outcome.verified = True
+    return outcome

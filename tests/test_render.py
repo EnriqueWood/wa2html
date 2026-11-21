@@ -14,7 +14,7 @@ from wa2html.render import RenderOptions, format_text, is_emoji_only, render
 from wa2html.source import ExportSource
 from wa2html.verify import verify_page
 
-from .helpers import IOS_CHAT, IOS_FILES, make_zip
+from .helpers import IOS_CHAT, IOS_FILES, make_zip, png
 
 
 class PageScanner(HTMLParser):
@@ -140,6 +140,50 @@ class RenderTest(unittest.TestCase):
             if tag != "a":
                 self.assertFalse(value.startswith(("http:", "https:", "//")), (tag, value))
         self.assertIn("Content-Security-Policy", page)
+
+    def test_header_photo_in_voice_messages(self):
+        photo = png(6, 6)
+        with ExportSource(self.zip) as source:
+            chat = build_chat(source)
+            page_path = self.tmp / "photo.html"
+            render(chat, source, page_path, RenderOptions(avatar=(photo, "image/png")))
+        page = page_path.read_text(encoding="utf-8")
+        encoded = base64.b64encode(photo).decode()
+        self.assertEqual(page.count(encoded), 1)  # stored once, used by header, info panel and voice notes
+        bob = chat.sender_by_name("Bob")  # the chat is named after Bob: the photo is his
+        self.assertIn(f'.msg[data-s="{bob.id}"] .v-avatar:not(.music)', page)
+        self.assertNotIn(f'.msg[data-s="{chat.sender_by_name("Alice").id}"] .v-avatar', page)
+        self.assertEqual(page.count('class="avatar-img"'), 2)
+
+    def test_owner_photo_in_own_voice_messages(self):
+        theirs, mine = png(6, 6), png(7, 7)
+        with ExportSource(self.zip) as source:
+            chat = build_chat(source)
+            page_path = self.tmp / "photos.html"
+            render(chat, source, page_path, RenderOptions(avatar=(theirs, "image/png"), my_avatar=(mine, "image/png")))
+        page = page_path.read_text(encoding="utf-8")
+        alice, bob = chat.sender_by_name("Alice"), chat.sender_by_name("Bob")
+        self.assertEqual(chat.me, alice.id)
+        self.assertEqual(page.count(base64.b64encode(mine).decode()), 1)
+        self.assertEqual(page.count(base64.b64encode(theirs).decode()), 1)
+        self.assertIn(f'.msg[data-s="{alice.id}"] .v-avatar:not(.music) {{ background: var(--my-avatar)', page)
+        self.assertIn(f'.msg[data-s="{bob.id}"] .v-avatar:not(.music) {{ background: var(--chat-avatar)', page)
+
+    def test_owner_photo_alone(self):
+        with ExportSource(self.zip) as source:
+            chat = build_chat(source)
+            page_path = self.tmp / "mine.html"
+            render(chat, source, page_path, RenderOptions(my_avatar=(png(5, 5), "image/png")))
+        page = page_path.read_text(encoding="utf-8")
+        self.assertIn("var(--my-avatar)", page)
+        self.assertNotIn(":root { --chat-avatar:", page)  # the contact keeps the initials
+        self.assertNotIn('class="avatar-img"', page)
+
+    def test_no_photo_keeps_initials(self):
+        _, _, page, _ = self.build()
+        self.assertNotIn(":root { --chat-avatar:", page)  # no picture defined
+        self.assertNotIn('class="avatar-img"', page)
+        self.assertNotIn(".v-avatar:not(.music) {", page)
 
     def test_lottie_player_is_bundled(self):
         _, result, page, _ = self.build()

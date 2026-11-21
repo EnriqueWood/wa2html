@@ -102,6 +102,26 @@ def short_path(path: Path, limit: int = 60) -> str:
     return sep.join(head + ["…"] + tail)
 
 
+def human_size(size: int) -> str:
+    value = float(size)
+    for unit in ("B", "KB", "MB", "GB"):
+        if value < 1024 or unit == "GB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{size} B"
+
+
+def human_duration(seconds: float) -> str:
+    total = max(0, int(round(seconds)))
+    hours, rest = divmod(total, 3600)
+    minutes, secs = divmod(rest, 60)
+    if hours:
+        return f"{hours} h {minutes:02d} min"
+    if minutes:
+        return f"{minutes} min {secs:02d} s"
+    return f"{secs} s"
+
+
 def open_with_system(path: Path, reveal: bool = False) -> None:
     if sys.platform == "win32":
         if reveal:
@@ -118,11 +138,13 @@ def open_with_system(path: Path, reveal: bool = False) -> None:
 
 
 class App:
-    def __init__(self, root, lang: Optional[str] = None):
+    def __init__(self, root, lang: Optional[str] = None, popups: bool = True):
         import tkinter as tk
 
         self.tk = tk
         self.root = root
+        self.popups = popups  # the "page ready" dialog; off for automated runs
+        self.started = 0.0
         self.persist = lang is None  # tests pass a language and must not touch the settings file
         self.lang = lang or load_settings().get("lang") or detect_language()
         if self.lang not in i18n.LANGUAGES:
@@ -138,6 +160,9 @@ class App:
         self.custom_output: Optional[Path] = None
         self.force_output = False
         self.avatar: Optional[Path] = None
+        # The owner's photo is the same for every chat: remembered between runs.
+        remembered = load_settings().get("my_avatar") if self.persist else None
+        self.my_avatar: Optional[Path] = Path(remembered) if remembered and Path(remembered).is_file() else None
         self.busy = False
         self.outcome: Optional[Outcome] = None
         self.status: Tuple[str, bool, str] = ("", True, "")  # (text key, ok, extra)
@@ -151,7 +176,7 @@ class App:
         root.minsize(680, 600)
         self.body = None
         self._build()
-        root.after(100, self._poll)
+        self._poll_job = root.after(100, self._poll)
 
     # -- building -----------------------------------------------------------
 
@@ -230,15 +255,30 @@ class App:
         ttk.Label(frame, text=self.t["right"]).grid(row=row, column=0, sticky="w", pady=3, padx=(0, 12))
         self.me_box = ttk.Combobox(frame, state="disabled", width=36)
         self.me_box.grid(row=row, column=1, columnspan=2, sticky="w", pady=3)
-        self.me_box.bind("<<ComboboxSelected>>", lambda _e: setattr(self, "me", self.me_box.get()))
+        self.me_box.bind("<<ComboboxSelected>>", self._on_me)
         row += 1
-        ttk.Label(frame, text=self.t["photo"]).grid(row=row, column=0, sticky="w", pady=3, padx=(0, 12))
+        # Photos: the contact's (header + their voice messages) and the owner's (their voice messages).
+        self.photo_title = ttk.Label(frame, text="")
+        self.photo_title.grid(row=row, column=0, sticky="w", pady=3, padx=(0, 12))
         self.avatar_label = ttk.Label(frame, text="")
         self.avatar_label.grid(row=row, column=1, sticky="w", pady=3)
         photo_buttons = ttk.Frame(frame)
         photo_buttons.grid(row=row, column=2, sticky="e")
         ttk.Button(photo_buttons, text=self.t["choose"], command=self.choose_avatar).pack(side="left")
         ttk.Button(photo_buttons, text=self.t["remove"], command=self.remove_avatar).pack(side="left", padx=(6, 0))
+        row += 1
+        self.my_photo_title = ttk.Label(frame, text="")
+        self.my_photo_title.grid(row=row, column=0, sticky="w", pady=3, padx=(0, 12))
+        self.my_avatar_label = ttk.Label(frame, text="")
+        self.my_avatar_label.grid(row=row, column=1, sticky="w", pady=3)
+        my_photo_buttons = ttk.Frame(frame)
+        my_photo_buttons.grid(row=row, column=2, sticky="e")
+        ttk.Button(my_photo_buttons, text=self.t["choose"], command=self.choose_my_avatar).pack(side="left")
+        ttk.Button(my_photo_buttons, text=self.t["remove"], command=self.remove_my_avatar).pack(side="left", padx=(6, 0))
+        row += 1
+        ttk.Label(frame, text=self.t["photo_hint"], foreground=gray, wraplength=wide).grid(
+            row=row, column=0, columnspan=3, sticky="w", pady=(0, 4)
+        )
         row += 1
         ttk.Label(frame, text=self.t["save_as"]).grid(row=row, column=0, sticky="nw", pady=3, padx=(0, 12))
         self.mode_var = tk.StringVar(value=self.mode)
@@ -321,7 +361,11 @@ class App:
         names = self.preview.participants if self.preview else []
         self.me_box.configure(values=names, state="readonly" if names else "disabled")
         self.me_box.set(self.me if self.me in names else "")
+        contact = self.preview.title if self.preview else ""
+        self.photo_title.configure(text=t["photo"].format(name=contact) if contact else t["photo_plain"])
+        self.my_photo_title.configure(text=t["my_photo"].format(name=self.me) if self.me else t["my_photo_plain"])
         self.avatar_label.configure(text=self.avatar.name if self.avatar else t["none"])
+        self.my_avatar_label.configure(text=self.my_avatar.name if self.my_avatar else t["none"])
         self.mode_var.set(self.mode)
         output = self.output_path()
         if output is None:
@@ -368,6 +412,10 @@ class App:
             save_settings(settings)
         self._build()
 
+    def _on_me(self, _event=None) -> None:
+        self.me = self.me_box.get()
+        self._refresh()  # "Your photo (name)" follows the choice
+
     def _on_mode(self) -> None:
         self.mode = self.mode_var.get()
         if self.custom_output is not None:  # a chosen file name does not fit the other mode
@@ -387,7 +435,16 @@ class App:
                 getattr(self, "_on_" + event[0])(*event[1:])
         except queue.Empty:
             pass
-        self.root.after(100, self._poll)
+        self._poll_job = self.root.after(100, self._poll)
+
+    def close(self) -> None:
+        """Stop the event polling (before destroying the root window)."""
+        job = getattr(self, "_poll_job", None)
+        if job is not None:
+            try:
+                self.root.after_cancel(job)
+            except Exception:
+                pass
 
     def _on_log(self, level: str, text: str) -> None:
         prefix = {"error": "error: ", "warning": "warning: "}.get(level, "")
@@ -417,6 +474,46 @@ class App:
         self.custom_output = None
         self.force_output = False
         self._refresh()
+        if self.popups:
+            self.root.after(50, self._announce)
+
+    def completion_message(self) -> Tuple[str, str, bool]:
+        """(title, text, ok) of the dialog shown when the work ends."""
+        t = self.t
+        outcome = self.outcome
+        elapsed = human_duration(time.time() - self.started) if self.started else ""
+        if outcome is not None and outcome.code == 0 and outcome.verified and outcome.page is not None:
+            lines = [outcome.page.name, human_size(outcome.size) + ("  ·  " + t["done_time"].format(elapsed=elapsed) if elapsed else ""), ""]
+            lines.append(t["done_checked"].format(messages=f"{outcome.messages:,}", files=f"{outcome.files:,}"))
+            for key, n in (("done_omitted", outcome.omitted), ("done_missing", outcome.missing)):
+                if n == 1:
+                    lines.append(t[key + "_1"])
+                elif n:
+                    lines.append(t[key].format(n=f"{n:,}"))
+            lines += ["", t["ask_open"]]
+            return t["done_title"], "\n".join(lines), True
+        detail = outcome.error if outcome is not None and outcome.error else ""
+        text = t["fail_body"] + ("\n\n" + detail if detail else "")
+        return t["fail_title"], text, False
+
+    def _announce(self) -> None:
+        from tkinter import messagebox
+
+        # Bring the window forward: the work may have finished while the user was elsewhere.
+        try:
+            self.root.deiconify()
+            self.root.lift()
+            self.root.attributes("-topmost", True)
+            self.root.after(300, lambda: self.root.attributes("-topmost", False))
+            self.root.focus_force()
+        except Exception:
+            pass
+        title, text, ok = self.completion_message()
+        if ok:
+            if messagebox.askyesno(title, text, icon="info", parent=self.root):
+                self.open_page()
+        else:
+            messagebox.showerror(title, text, parent=self.root)
 
     # -- actions -------------------------------------------------------------
 
@@ -471,6 +568,34 @@ class App:
         self.avatar = None
         self._refresh()
 
+    def _choose_image(self) -> Optional[Path]:
+        from tkinter import filedialog
+
+        name = filedialog.askopenfilename(
+            parent=self.root,
+            filetypes=[(self.t["images"], "*.jpg *.jpeg *.png *.webp *.gif"), (self.t["all_files"], "*.*")],
+        )
+        return Path(name) if name else None
+
+    def set_my_avatar(self, path: Optional[Path]) -> None:
+        self.my_avatar = path
+        if self.persist:
+            settings = load_settings()
+            if path is None:
+                settings.pop("my_avatar", None)
+            else:
+                settings["my_avatar"] = str(path)
+            save_settings(settings)
+        self._refresh()
+
+    def choose_my_avatar(self) -> None:
+        path = self._choose_image()
+        if path:
+            self.set_my_avatar(path)
+
+    def remove_my_avatar(self) -> None:
+        self.set_my_avatar(None)
+
     def output_path(self) -> Optional[Path]:
         if self.custom_output is not None:
             return self.custom_output
@@ -510,6 +635,7 @@ class App:
 
         try:
             avatar = read_image(str(self.avatar)) if self.avatar else None
+            my_avatar = read_image(str(self.my_avatar)) if self.my_avatar else None
         except (ValueError, OSError) as exc:
             messagebox.showerror(self.t["error"], str(exc), parent=self.root)
             return
@@ -519,20 +645,22 @@ class App:
             mode=self.mode,
             force=self.force_output,
             me=self.me or None,
-            options=RenderOptions(avatar=avatar),
+            options=RenderOptions(avatar=avatar, my_avatar=my_avatar),
         )
         self.busy = True
         self.outcome = None
         self.log_lines = []
         self.status = ("working", True, "")
+        self.started = time.time()
         self._refresh()
 
         def work():
             try:
                 outcome = run_job(job, lambda level, text: self.events.put(("log", level, text)))
-            except Exception as exc:  # unexpected: report it instead of losing it
-                self.events.put(("log", "error", f"{type(exc).__name__}: {exc}"))
-                outcome = Outcome(1)
+            except BaseException as exc:  # unexpected (even MemoryError): report it instead of losing it
+                message = f"{type(exc).__name__}: {exc}"
+                self.events.put(("log", "error", message))
+                outcome = Outcome(1, error=message)
             self.events.put(("done", outcome))
 
         self._run_in_background(work)
@@ -610,7 +738,7 @@ def selftest(export: Path, timeout: float = 300.0) -> int:
         say("gui selftest: no window can be opened (no display or no Tk)")
         return 1
     try:
-        app = App(root, lang="en")
+        app = App(root, lang="en", popups=False)
 
         def wait(condition: Callable[[], bool]) -> bool:
             deadline = time.time() + timeout
@@ -640,6 +768,7 @@ def selftest(export: Path, timeout: float = 300.0) -> int:
             say("\n".join(line for _, line in app.log_lines))
             ok = app.outcome.code == 0 and app.outcome.verified and (Path(tmp) / "selftest.html").exists()
         say("gui selftest passed" if ok else "gui selftest FAILED")
+        app.close()
         return 0 if ok else 1
     finally:
         root.destroy()

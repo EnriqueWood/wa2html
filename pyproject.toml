@@ -7,7 +7,7 @@ name = "wa2html"
 dynamic = ["version"]
 description = "Turn a WhatsApp chat export (.zip) into one self-contained, WhatsApp-style HTML file with playable voice notes, stickers, photos and videos."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE", "wa2html/assets/vendor/LICENSE-lottie-web.md"]
 dependencies = []

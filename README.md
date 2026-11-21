@@ -82,8 +82,10 @@ Open wa2html. A window shows three steps:
 
 1. **Exported chat:** choose the `.zip` (or, for Android exports without a zip, the folder with the
    files). wa2html shows how many messages and files it found.
-2. **Options:** whose messages go on the right, an optional photo for the chat header, one `.html`
-   file or a folder with the media (for very large chats), and where to save it.
+2. **Options:** whose messages go on the right, optional photos of the contact and of you (each
+   one appears in that person's voice messages; the contact's also in the header; wa2html
+   remembers yours), one `.html` file or a folder with the media (for very large chats), and where
+   to save it.
 3. **Create page:** wa2html writes the page next to the `.zip` and checks it. When it says
    **Done. Checked: every message and file is in the page**, click **Open page**.
 
@@ -106,7 +108,7 @@ After that you can also double-click it in Finder (a Terminal window opens besid
 **Linux:** `chmod +x wa2html-linux-x64`, then `./wa2html-linux-x64` opens the window.
 
 <a name="en-python"></a>
-**With Python** (any system with Python 3.9 or newer):
+**With Python** (any system with Python 3.10 or newer):
 
 ```sh
 pip install https://github.com/EnriqueWood/wa2html/archive/refs/heads/main.zip
@@ -145,7 +147,7 @@ wa2html INPUT [-o OUTPUT] [--mode single|folder] [--check] [--force] [--no-verif
               [--me NAME] [--title TITLE] [--date-order auto|dmy|mdy|ymd]
               [--lang auto|en|es|pt|fr|de|it] [--theme auto|light|dark] [--time-format auto|12|24]
               [--wallpaper COLOUR] [--wallpaper-image IMAGE] [--no-pattern]
-              [--avatar IMAGE] [--lottie-js FILE]
+              [--avatar IMAGE] [--my-avatar IMAGE] [--lottie-js FILE]
 ```
 
 - `INPUT`: the `.zip`, the folder with the exported files, or just the `.txt` (an export without
@@ -157,7 +159,9 @@ wa2html INPUT [-o OUTPUT] [--mode single|folder] [--check] [--force] [--no-verif
   is named after the other person); it can also be changed in the page.
 - `--lang`: the page's default language. By default the page follows the reader's browser; the
   reader can always change it in the page.
-- `--avatar IMAGE`: a picture for the chat header. `--wallpaper-image IMAGE`: a default wallpaper.
+- `--avatar IMAGE`: the contact's picture, for the chat header and their voice messages.
+  `--my-avatar IMAGE`: your picture, for your voice messages. Without a picture a person's voice
+  messages show their initials. `--wallpaper-image IMAGE`: a default wallpaper.
 - `--gui`: open the window instead (with `INPUT` already chosen, if given).
 - `-o OUTPUT`: where to write. Existing files are never overwritten: without `-o`, a new name such as
   `... (2).html` is used; with `-o`, wa2html stops unless you add `--force`.
@@ -337,8 +341,9 @@ Abre wa2html. Una ventana muestra tres pasos:
 
 1. **Chat exportado:** elige el `.zip` (o, en exports de Android sin zip, la carpeta con los
    archivos). wa2html muestra cuántos mensajes y archivos encontró.
-2. **Opciones:** quién aparece a la derecha, una foto opcional para la cabecera, un archivo `.html` o
-   una carpeta con los archivos (para chats muy grandes), y dónde guardarlo.
+2. **Opciones:** quién aparece a la derecha, fotos opcionales del contacto y tuya (cada una aparece
+   en los audios de esa persona; la del contacto también en la cabecera; la tuya se recuerda), un
+   archivo `.html` o una carpeta con los archivos (para chats muy grandes), y dónde guardarlo.
 3. **Crear página:** wa2html guarda la página junto al `.zip` y la verifica. Cuando diga
    **Listo. Verificado: todos los mensajes y archivos están en la página**, haz clic en
    **Abrir página**.
@@ -361,7 +366,7 @@ Después también puedes abrirlo con doble clic en el Finder (se abre una Termin
 
 **Linux:** `chmod +x wa2html-linux-x64` y luego `./wa2html-linux-x64` abre la ventana.
 
-**Con Python** (cualquier sistema con Python 3.9 o posterior):
+**Con Python** (cualquier sistema con Python 3.10 o posterior):
 
 ```sh
 pip install https://github.com/EnriqueWood/wa2html/archive/refs/heads/main.zip
@@ -377,7 +382,8 @@ La misma conversión funciona sin ventana: `wa2html "WhatsApp Chat - Ana.zip"` (
 `wa2html-cli-windows-x64.exe "WhatsApp Chat - Ana.zip"`). La última línea del informe debe decir
 `Verified ... identical to the export`; si dice `verification FAILED`, no confíes en esa página y
 sigue usando el `.zip`. Opciones útiles: `--check` (solo el informe), `--mode folder` (carpeta en
-vez de un archivo), `--me "Nombre"`, `--avatar foto.jpg`. Nunca sobrescribe: si el archivo existe,
+vez de un archivo), `--me "Nombre"`, `--avatar foto.jpg` (contacto), `--my-avatar foto.jpg` (tú).
+Nunca sobrescribe: si el archivo existe,
 guarda como `... (2).html`. Todas las opciones: `--help` y la sección [English](#en).
 
 ### Qué muestra la página
@@ -480,7 +486,7 @@ xattr -d com.apple.quarantine wa2html-macos-arm64   # o programa não é assinad
 
 **Linux:** `chmod +x wa2html-linux-x64` e depois `./wa2html-linux-x64`.
 
-**Com Python** (3.9 ou mais recente):
+**Com Python** (3.10 ou mais recente):
 `pip install https://github.com/EnriqueWood/wa2html/archive/refs/heads/main.zip` e depois
 `wa2html-gui` (janela) ou `wa2html "WhatsApp Chat - Ana.zip"` (linha de comando).
 
@@ -579,7 +585,7 @@ xattr -d com.apple.quarantine wa2html-macos-arm64   # le programme n'est pas sig
 
 **Linux :** `chmod +x wa2html-linux-x64`, puis `./wa2html-linux-x64`.
 
-**Avec Python** (3.9 ou plus récent) :
+**Avec Python** (3.10 ou plus récent) :
 `pip install https://github.com/EnriqueWood/wa2html/archive/refs/heads/main.zip`, puis
 `wa2html-gui` (fenêtre) ou `wa2html "WhatsApp Chat - Anne.zip"` (ligne de commande).
 
@@ -678,7 +684,7 @@ xattr -d com.apple.quarantine wa2html-macos-arm64   # das Programm ist nicht von
 
 **Linux:** `chmod +x wa2html-linux-x64`, dann `./wa2html-linux-x64`.
 
-**Mit Python** (3.9 oder neuer):
+**Mit Python** (3.10 oder neuer):
 `pip install https://github.com/EnriqueWood/wa2html/archive/refs/heads/main.zip`, dann
 `wa2html-gui` (Fenster) oder `wa2html "WhatsApp Chat - Anna.zip"` (Kommandozeile).
 
@@ -776,7 +782,7 @@ xattr -d com.apple.quarantine wa2html-macos-arm64   # il programma non è firmat
 
 **Linux:** `chmod +x wa2html-linux-x64`, poi `./wa2html-linux-x64`.
 
-**Con Python** (3.9 o successivo):
+**Con Python** (3.10 o successivo):
 `pip install https://github.com/EnriqueWood/wa2html/archive/refs/heads/main.zip`, poi
 `wa2html-gui` (finestra) oppure `wa2html "WhatsApp Chat - Anna.zip"` (riga di comando).
 

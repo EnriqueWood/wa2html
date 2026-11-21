@@ -44,7 +44,8 @@ class RenderOptions:
     wallpaper: str = "default"  # "default" (theme colour) or a CSS colour/gradient
     pattern: bool = True  # doodle pattern over the wallpaper
     wallpaper_image: Optional[Tuple[bytes, str]] = None  # (data, mime)
-    avatar: Optional[Tuple[bytes, str]] = None
+    avatar: Optional[Tuple[bytes, str]] = None  # the contact: header and their voice messages
+    my_avatar: Optional[Tuple[bytes, str]] = None  # the owner of the export: their voice messages
     lottie_js: Optional[str] = None
 
 
@@ -582,9 +583,39 @@ class Renderer:
 
     def _avatar(self) -> str:
         if self.opt.avatar:
-            data, mime = self.opt.avatar
-            return f'<img src="data:{mime};base64,{base64.b64encode(data).decode()}" alt="">'
+            # The picture itself is stored once, in --chat-avatar (see _avatar_css).
+            return f'<span class="avatar-img" role="img" aria-label="{esc(self.chat.title)}"></span>'
         return esc(_initials(self.chat.title))
+
+    def photo_sender(self) -> Optional[Sender]:
+        """The participant the header photo shows: the person the chat is named after."""
+        if not self.opt.avatar or self.chat.is_group:
+            return None
+        named = self.chat.sender_by_name(self.chat.title)
+        if named is not None:
+            return named if named.id != self.chat.me else None
+        others = [s for s in self.chat.senders if s.id != self.chat.me]
+        return others[0] if len(others) == 1 and self.chat.me else None
+
+    def _avatar_css(self) -> str:
+        """Each picture is stored once, as a CSS variable, and used by its owner's voice messages.
+
+        The rules follow the person (data-s), not the side of the screen, so
+        they stay right when a reader changes who is shown on the right.
+        """
+        css = ""
+        rule = '.msg[data-s="{id}"] .v-avatar:not(.music) {{ background: var({var}) center / cover no-repeat; color: transparent; }}\n'
+        if self.opt.avatar:
+            data, mime = self.opt.avatar
+            css += f':root {{ --chat-avatar: url("data:{mime};base64,{base64.b64encode(data).decode()}"); }}\n'
+            person = self.photo_sender()
+            if person is not None:
+                css += rule.format(id=person.id, var="--chat-avatar")
+        if self.opt.my_avatar and self.chat.me:
+            data, mime = self.opt.my_avatar
+            css += f':root {{ --my-avatar: url("data:{mime};base64,{base64.b64encode(data).decode()}"); }}\n'
+            css += rule.format(id=self.chat.me, var="--my-avatar")
+        return css
 
     def _subtitle(self) -> str:
         if self.chat.is_group:
@@ -654,6 +685,7 @@ class Renderer:
             "CHAT_KEY": config["chatKey"],
             "VERSION": __version__,
             "CSS": css,
+            "AVATAR_CSS": self._avatar_css(),
             "AVATAR": self._avatar(),
             "SUBTITLE": self._subtitle(),
             "MESSAGES": self.render_messages(),
