@@ -400,7 +400,7 @@ class App:
         # An idle indeterminate bar keeps showing its moving block on Windows: switch modes.
         if self.busy:
             self.progress.configure(mode="indeterminate")
-            self.progress.start(12)
+            self.progress.start(40)  # a calm animation; very short intervals flood slow redraws
         else:
             self.progress.stop()
             self.progress.configure(mode="determinate", value=0)
@@ -747,6 +747,30 @@ def main(argv: Optional[list] = None) -> int:
     return code
 
 
+def run_until(root, condition: Callable[[], bool], timeout: float) -> bool:
+    """Run the real event loop until `condition()` is true or `timeout` seconds pass.
+
+    For automated runs (self-test, tests). It uses mainloop() like the real program
+    instead of looping on update(): update() means "process events until none are
+    left", which never ends on macOS while the progress bar keeps scheduling redraws.
+    """
+    deadline = time.time() + timeout
+    met = [False]
+
+    def check() -> None:
+        if condition():
+            met[0] = True
+            root.quit()
+        elif time.time() > deadline:
+            root.quit()
+        else:
+            root.after(25, check)
+
+    root.after(0, check)
+    root.mainloop()
+    return met[0]
+
+
 def selftest(export: Path, timeout: float = 300.0) -> int:
     """Drive the window without a person: choose `export`, create the page, check it.
 
@@ -766,13 +790,7 @@ def selftest(export: Path, timeout: float = 300.0) -> int:
         app = App(root, lang="en", popups=False)
 
         def wait(condition: Callable[[], bool]) -> bool:
-            deadline = time.time() + timeout
-            while time.time() < deadline:
-                root.update()
-                if condition():
-                    return True
-                time.sleep(0.05)
-            return False
+            return run_until(root, condition, timeout)
 
         for code in i18n.LANGUAGES:  # every translation must build the window
             app.set_language(code)

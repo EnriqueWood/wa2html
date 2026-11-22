@@ -3,7 +3,6 @@ import io
 import json
 import os
 import tempfile
-import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -96,13 +95,9 @@ class Window(unittest.TestCase):
         self._tmp.cleanup()
 
     def wait(self, condition, timeout=60):
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            self.root.update()
-            if condition():
-                return
-            time.sleep(0.02)
-        self.fail("timed out")
+        # The real event loop (see gui.run_until), never an update() loop.
+        if not gui.run_until(self.root, condition, timeout):
+            self.fail("timed out")
 
     def test_choose_then_create(self):
         app = gui.App(self.root, lang="es", popups=False)
