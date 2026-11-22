@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=wa2html
+Comment=Turn a WhatsApp chat export into a web page that looks like WhatsApp
+Comment[es]=Convierte un chat exportado de WhatsApp en una página web con el aspecto de WhatsApp
+Comment[pt]=Transforma uma conversa exportada do WhatsApp em uma página web com o visual do WhatsApp
+Comment[fr]=Transforme une discussion WhatsApp exportée en une page web qui ressemble à WhatsApp
+Comment[de]=Macht aus einem exportierten WhatsApp-Chat eine Webseite, die wie WhatsApp aussieht
+Comment[it]=Trasforma una chat WhatsApp esportata in una pagina web con l'aspetto di WhatsApp
+Exec=wa2html --gui
+Icon=wa2html
+Terminal=false
+Categories=Utility;
+Keywords=WhatsApp;chat;export;backup;

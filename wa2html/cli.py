@@ -140,6 +140,8 @@ def main(argv: Optional[Sequence[str]] = None, allow_window: bool = True) -> int
         except (AttributeError, ValueError):
             pass
     args_list = sys.argv[1:] if argv is None else [str(a) for a in argv]
+    # Older macOS versions pass a process serial number to an app opened from Finder.
+    args_list = [a for a in args_list if not a.startswith("-psn_")]
 
     if args_list[:1] == ["--gui-selftest"]:  # used by the release workflow on each executable
         from .gui import selftest

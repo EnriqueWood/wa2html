@@ -274,6 +274,11 @@ class CommandLine(unittest.TestCase):
         self.assertEqual(code, 2)  # argparse: missing input
         self.assertIn("usage", out)
 
+    def test_ignores_macos_process_serial_number(self):
+        code, out = self.run_cli("-psn_0_12345", self.zip, "--check")
+        self.assertEqual(code, 0, out)
+        self.assertIn("1 missing", out)
+
     def test_bad_input(self):
         bogus = self.tmp / "notes.md"
         bogus.write_text("hello", encoding="utf-8")

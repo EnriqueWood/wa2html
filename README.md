@@ -37,8 +37,11 @@ Get the program for your computer from the **[latest release](https://github.com
 | --- | --- |
 | Windows 10/11 (64-bit) | `wa2html-windows-x64.exe` |
 | Windows, for terminals and scripts | `wa2html-cli-windows-x64.exe` |
-| Mac with Apple silicon (M1 or newer) | `wa2html-macos-arm64` |
-| Linux (64-bit) | `wa2html-linux-x64` |
+| Mac with Apple silicon (M1 or newer) | `wa2html-macos-arm64.dmg` |
+| Linux (64-bit), any distribution | `wa2html-linux-x64.AppImage` |
+| Ubuntu, Debian, Linux Mint and similar | `wa2html-linux-x64.deb` |
+| Fedora, openSUSE and similar | `wa2html-linux-x64.rpm` |
+| Linux, for terminals and scripts | `wa2html-linux-x64` |
 
 The release also has `SHA256SUMS.txt`, with the checksum of each file. Intel Macs and other
 systems can run wa2html with Python (see [With Python](#en-python)).
@@ -95,17 +98,20 @@ The language of the window can be changed at the top right; wa2html remembers it
 with the chat already chosen. The program is not signed, so Windows may say it protected your PC:
 click **More info** > **Run anyway**.
 
-**Mac** (the first time, in Terminal, in the folder where you downloaded it):
+**Mac:** open `wa2html-macos-arm64.dmg` and drag **wa2html** onto **Applications**, then open it
+from Applications or Launchpad. The app is not signed by Apple, so the first time macOS will not
+open it. Go to **System Settings** > **Privacy & Security**, and under **Security** click
+**Open Anyway** and confirm with your password (the button is there for about an hour after the
+first attempt). From then on it opens with a double-click.
 
-```sh
-chmod +x wa2html-macos-arm64
-xattr -d com.apple.quarantine wa2html-macos-arm64   # the program is not signed by Apple
-./wa2html-macos-arm64                                # opens the window
-```
+**Linux:**
 
-After that you can also double-click it in Finder (a Terminal window opens beside wa2html).
-
-**Linux:** `chmod +x wa2html-linux-x64`, then `./wa2html-linux-x64` opens the window.
+- **AppImage** (any distribution): allow the file to run as a program (in its **Properties** in
+  the file manager, or `chmod +x wa2html-linux-x64.AppImage`), then double-click it. If it
+  complains about FUSE, install your distribution's `fuse3` package.
+- **.deb** or **.rpm**: open it with your software installer, or install it from a terminal with
+  `sudo apt install ./wa2html-linux-x64.deb` or `sudo dnf install ./wa2html-linux-x64.rpm`. wa2html
+  then appears in the applications menu.
 
 <a name="en-python"></a>
 **With Python** (any system with Python 3.10 or newer):
@@ -122,8 +128,16 @@ To keep the page, copy it together with the original `.zip`.
 
 ### Command line
 
-The same conversion works without the window: `wa2html "WhatsApp Chat - Alice.zip"` (on Windows,
-`wa2html-cli-windows-x64.exe "WhatsApp Chat - Alice.zip"`). It prints a report like this:
+The same conversion works without the window: `wa2html "WhatsApp Chat - Alice.zip"` (installed
+from Python, the `.deb` or the `.rpm`). With the downloaded programs:
+
+| System | Command |
+| --- | --- |
+| Windows | `wa2html-cli-windows-x64.exe "WhatsApp Chat - Alice.zip"` |
+| Mac | `/Applications/wa2html.app/Contents/MacOS/wa2html "WhatsApp Chat - Alice.zip"` |
+| Linux | `./wa2html-linux-x64 "WhatsApp Chat - Alice.zip"` (after `chmod +x wa2html-linux-x64`), or the AppImage the same way |
+
+It prints a report like this:
 
 ```
 Source        WhatsApp Chat - Alice.zip
@@ -241,21 +255,24 @@ The tests build synthetic exports (made-up names, generated images and audio) fo
 | `wa2html/convert.py` | The conversion, shared by the window and the command line |
 | `wa2html/gui.py`, `wa2html/icon.py` | The window (Tkinter) and its icon |
 | `wa2html/i18n.py`, `wa2html/locales/` | Translations |
-| `packaging/` | Entry points, icon and smoke test for the standalone executables |
+| `packaging/` | Entry points, icon and smoke test for the standalone programs; the macOS app and disk image; the AppImage, `.deb` and `.rpm` |
 | `.github/workflows/` | CI (tests on Windows, Linux, macOS) and releases |
 
 ### Releases
 
 The executables are built by GitHub Actions with PyInstaller (`.github/workflows/release.yml`):
 
-1. Set the new version in `wa2html/__init__.py` (`__version__ = "0.2.0"`) and commit.
-2. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
-3. The workflow runs the tests, builds the four executables, runs each one on a synthetic export,
-   window included (`packaging/smoke_test.py`), and publishes a release with the executables and
-   `SHA256SUMS.txt`. It stops if the tag does not match `__version__`.
+1. Set the new version in `wa2html/__init__.py` (`__version__ = "0.3.0"`) and commit.
+2. Tag and push: `git tag v0.3.0 && git push origin v0.3.0`.
+3. The workflow runs the tests, builds the programs and packages, runs each one on a synthetic
+   export, window included (`packaging/smoke_test.py`), installs the `.deb` and `.rpm` in clean
+   containers (Ubuntu, Debian, Fedora, openSUSE) and tests the app inside the `.dmg`. Then it
+   publishes a release with all the files and `SHA256SUMS.txt`. It stops if the tag does not
+   match `__version__`.
 
-Running the workflow by hand (Actions > Release > Run workflow) only builds and tests the
-executables and keeps them as workflow artifacts.
+A push that changes `packaging/` or the workflow, or running it by hand (Actions > Release > Run
+workflow), only builds and tests, and keeps the files as workflow artifacts. To build the Linux
+files locally: `sh tools/dev/build_linux.sh` (Windows: `sh tools/dev/build_windows.sh`).
 
 ### Licence
 
@@ -297,8 +314,11 @@ Baja el programa para tu computador desde el **[último release](https://github.
 | --- | --- |
 | Windows 10/11 (64 bits) | `wa2html-windows-x64.exe` |
 | Windows, para terminal y scripts | `wa2html-cli-windows-x64.exe` |
-| Mac con chip Apple (M1 o posterior) | `wa2html-macos-arm64` |
-| Linux (64 bits) | `wa2html-linux-x64` |
+| Mac con chip Apple (M1 o posterior) | `wa2html-macos-arm64.dmg` |
+| Linux (64 bits), cualquier distribución | `wa2html-linux-x64.AppImage` |
+| Ubuntu, Debian, Linux Mint y similares | `wa2html-linux-x64.deb` |
+| Fedora, openSUSE y similares | `wa2html-linux-x64.rpm` |
+| Linux, para terminal y scripts | `wa2html-linux-x64` |
 
 Los Mac con Intel y otros sistemas pueden usar wa2html con Python (ver *Con Python* más abajo).
 
@@ -354,17 +374,20 @@ El idioma de la ventana se cambia arriba a la derecha y wa2html lo recuerda.
 la ventana con el chat ya elegido. El programa no está firmado, así que Windows puede decir que
 protegió tu PC: haz clic en **Más información** > **Ejecutar de todas formas**.
 
-**Mac** (la primera vez, en Terminal, en la carpeta donde lo descargaste):
+**Mac:** abre `wa2html-macos-arm64.dmg`, arrastra **wa2html** a **Aplicaciones** y ábrelo desde
+Aplicaciones o el Launchpad. La app no está firmada por Apple, así que la primera vez macOS no la
+abre. Ve a **Configuración del Sistema** > **Privacidad y seguridad** y, en **Seguridad**, haz clic
+en **Abrir de todos modos** y confirma con tu contraseña (el botón aparece durante una hora después
+del primer intento). Desde entonces se abre con doble clic.
 
-```sh
-chmod +x wa2html-macos-arm64
-xattr -d com.apple.quarantine wa2html-macos-arm64   # el programa no está firmado por Apple
-./wa2html-macos-arm64                                # abre la ventana
-```
+**Linux:**
 
-Después también puedes abrirlo con doble clic en el Finder (se abre una Terminal junto a wa2html).
-
-**Linux:** `chmod +x wa2html-linux-x64` y luego `./wa2html-linux-x64` abre la ventana.
+- **AppImage** (cualquier distribución): permite ejecutar el archivo como programa (en sus
+  **Propiedades**, en el gestor de archivos, o con `chmod +x wa2html-linux-x64.AppImage`) y haz
+  doble clic. Si reclama por FUSE, instala el paquete `fuse3` de tu distribución.
+- **.deb** o **.rpm**: ábrelo con el instalador de software, o instálalo desde una terminal con
+  `sudo apt install ./wa2html-linux-x64.deb` o `sudo dnf install ./wa2html-linux-x64.rpm`. Luego
+  wa2html aparece en el menú de aplicaciones.
 
 **Con Python** (cualquier sistema con Python 3.10 o posterior):
 
@@ -378,8 +401,11 @@ Para guardar la página, cópiala junto con el `.zip` original.
 
 ### Línea de comandos
 
-La misma conversión funciona sin ventana: `wa2html "WhatsApp Chat - Ana.zip"` (en Windows,
-`wa2html-cli-windows-x64.exe "WhatsApp Chat - Ana.zip"`). La última línea del informe debe decir
+La misma conversión funciona sin ventana: `wa2html "WhatsApp Chat - Ana.zip"` (instalado con
+Python, el `.deb` o el `.rpm`). Con los programas descargados: en Windows,
+`wa2html-cli-windows-x64.exe "WhatsApp Chat - Ana.zip"`; en Mac,
+`/Applications/wa2html.app/Contents/MacOS/wa2html "WhatsApp Chat - Ana.zip"`; en Linux,
+`./wa2html-linux-x64 "WhatsApp Chat - Ana.zip"`. La última línea del informe debe decir
 `Verified ... identical to the export`; si dice `verification FAILED`, no confíes en esa página y
 sigue usando el `.zip`. Opciones útiles: `--check` (solo el informe), `--mode folder` (carpeta en
 vez de un archivo), `--me "Nombre"`, `--avatar foto.jpg` (contacto), `--my-avatar foto.jpg` (tú).
@@ -429,9 +455,11 @@ Foi criado para guardar as conversas que importam, como a conversa com alguém q
 ### Download
 
 Baixe o programa na **[versão mais recente](https://github.com/EnriqueWood/wa2html/releases/latest)**:
-`wa2html-windows-x64.exe` (Windows 10/11, 64 bits), `wa2html-macos-arm64` (Mac com chip Apple, M1 ou
-mais recente) ou `wa2html-linux-x64` (Linux, 64 bits). Para usar no terminal do Windows há também
-`wa2html-cli-windows-x64.exe`. Macs com Intel e outros sistemas podem usar o wa2html com Python
+`wa2html-windows-x64.exe` (Windows 10/11, 64 bits), `wa2html-macos-arm64.dmg` (Mac com chip Apple,
+M1 ou mais recente), `wa2html-linux-x64.AppImage` (Linux, 64 bits, qualquer distribuição) ou os
+pacotes `wa2html-linux-x64.deb` (Ubuntu, Debian, Linux Mint...) e `wa2html-linux-x64.rpm` (Fedora,
+openSUSE...). Para usar no terminal há também `wa2html-cli-windows-x64.exe` (Windows) e
+`wa2html-linux-x64` (Linux). Macs com Intel e outros sistemas podem usar o wa2html com Python
 (veja abaixo).
 
 ### Passo 1: exporte a conversa no WhatsApp
@@ -476,15 +504,17 @@ mudado no canto superior direito.
 programa não é assinado; se o Windows avisar que protegeu o computador, clique em
 **Mais informações** > **Executar assim mesmo**.
 
-**Mac** (na primeira vez, no Terminal, na pasta do download):
+**Mac:** abra `wa2html-macos-arm64.dmg`, arraste o **wa2html** para **Aplicativos** e abra-o a
+partir de Aplicativos ou do Launchpad. O app não é assinado pela Apple, então na primeira vez o macOS
+não o abre. Vá em **Ajustes do Sistema** > **Privacidade e Segurança** e, em **Segurança**, clique
+em **Abrir Mesmo Assim** e confirme com a sua senha (o botão aparece por cerca de uma hora depois da
+primeira tentativa). Depois disso, ele abre com um duplo clique.
 
-```sh
-chmod +x wa2html-macos-arm64
-xattr -d com.apple.quarantine wa2html-macos-arm64   # o programa não é assinado pela Apple
-./wa2html-macos-arm64                                # abre a janela
-```
-
-**Linux:** `chmod +x wa2html-linux-x64` e depois `./wa2html-linux-x64`.
+**Linux:** o **AppImage** funciona em qualquer distribuição: permita executar o arquivo como
+programa (nas **Propriedades** do arquivo ou com `chmod +x wa2html-linux-x64.AppImage`) e dê um
+duplo clique; se reclamar de FUSE, instale o pacote `fuse3`. O `.deb` e o `.rpm` são instalados com
+o instalador de programas ou com `sudo apt install ./wa2html-linux-x64.deb` /
+`sudo dnf install ./wa2html-linux-x64.rpm`, e o wa2html aparece no menu de aplicativos.
 
 **Com Python** (3.10 ou mais recente):
 `pip install https://github.com/EnriqueWood/wa2html/archive/refs/heads/main.zip` e depois
@@ -526,9 +556,11 @@ Il a été écrit pour garder les discussions qui comptent, comme celle avec un 
 ### Téléchargement
 
 Téléchargez le programme depuis la **[dernière version](https://github.com/EnriqueWood/wa2html/releases/latest)** :
-`wa2html-windows-x64.exe` (Windows 10/11, 64 bits), `wa2html-macos-arm64` (Mac avec puce Apple, M1 ou
-plus récent) ou `wa2html-linux-x64` (Linux, 64 bits). Pour le terminal Windows, il existe aussi
-`wa2html-cli-windows-x64.exe`. Les Mac Intel et les autres systèmes peuvent utiliser wa2html avec
+`wa2html-windows-x64.exe` (Windows 10/11, 64 bits), `wa2html-macos-arm64.dmg` (Mac avec puce Apple,
+M1 ou plus récent), `wa2html-linux-x64.AppImage` (Linux, 64 bits, toutes distributions) ou les
+paquets `wa2html-linux-x64.deb` (Ubuntu, Debian, Linux Mint...) et `wa2html-linux-x64.rpm` (Fedora,
+openSUSE...). Pour le terminal, il existe aussi `wa2html-cli-windows-x64.exe` (Windows) et
+`wa2html-linux-x64` (Linux). Les Mac Intel et les autres systèmes peuvent utiliser wa2html avec
 Python (voir plus bas).
 
 ### Étape 1 : exporter la discussion depuis WhatsApp
@@ -575,15 +607,18 @@ langue de la fenêtre se change en haut à droite.
 programme n'est pas signé ; si Windows indique qu'il a protégé l'ordinateur, cliquez sur
 **Informations complémentaires** > **Exécuter quand même**.
 
-**Mac** (la première fois, dans le Terminal, dans le dossier du téléchargement) :
+**Mac :** ouvrez `wa2html-macos-arm64.dmg`, faites glisser **wa2html** sur **Applications**, puis
+ouvrez-le depuis Applications ou le Launchpad. L'app n'est pas signée par Apple : la première fois,
+macOS ne l'ouvre pas. Allez dans **Réglages Système** > **Confidentialité et sécurité** et, sous
+**Sécurité**, cliquez sur **Ouvrir quand même**, puis confirmez avec votre mot de passe (le bouton
+reste disponible environ une heure après la première tentative). Ensuite, il s'ouvre d'un
+double-clic.
 
-```sh
-chmod +x wa2html-macos-arm64
-xattr -d com.apple.quarantine wa2html-macos-arm64   # le programme n'est pas signé par Apple
-./wa2html-macos-arm64                                # ouvre la fenêtre
-```
-
-**Linux :** `chmod +x wa2html-linux-x64`, puis `./wa2html-linux-x64`.
+**Linux :** l'**AppImage** fonctionne sur toutes les distributions : autorisez le fichier à
+s'exécuter comme un programme (dans ses **Propriétés** ou avec `chmod +x wa2html-linux-x64.AppImage`),
+puis double-cliquez dessus ; s'il réclame FUSE, installez le paquet `fuse3`. Le `.deb` et le `.rpm`
+s'installent avec l'installateur de logiciels ou avec `sudo apt install ./wa2html-linux-x64.deb` /
+`sudo dnf install ./wa2html-linux-x64.rpm` ; wa2html apparaît alors dans le menu des applications.
 
 **Avec Python** (3.10 ou plus récent) :
 `pip install https://github.com/EnriqueWood/wa2html/archive/refs/heads/main.zip`, puis
@@ -626,9 +661,11 @@ der nicht mehr da ist.
 ### Download
 
 Lade das Programm aus der **[neuesten Version](https://github.com/EnriqueWood/wa2html/releases/latest)** herunter:
-`wa2html-windows-x64.exe` (Windows 10/11, 64 Bit), `wa2html-macos-arm64` (Mac mit Apple-Chip, M1 oder
-neuer) oder `wa2html-linux-x64` (Linux, 64 Bit). Für das Windows-Terminal gibt es zusätzlich
-`wa2html-cli-windows-x64.exe`. Macs mit Intel und andere Systeme können wa2html mit Python nutzen
+`wa2html-windows-x64.exe` (Windows 10/11, 64 Bit), `wa2html-macos-arm64.dmg` (Mac mit Apple-Chip,
+M1 oder neuer), `wa2html-linux-x64.AppImage` (Linux, 64 Bit, jede Distribution) oder die Pakete
+`wa2html-linux-x64.deb` (Ubuntu, Debian, Linux Mint ...) und `wa2html-linux-x64.rpm` (Fedora,
+openSUSE ...). Für das Terminal gibt es zusätzlich `wa2html-cli-windows-x64.exe` (Windows) und
+`wa2html-linux-x64` (Linux). Macs mit Intel und andere Systeme können wa2html mit Python nutzen
 (siehe unten).
 
 ### Schritt 1: Chat in WhatsApp exportieren
@@ -674,15 +711,17 @@ klicken. Die Sprache des Fensters lässt sich oben rechts ändern.
 Programm ist nicht signiert; meldet Windows, dass es den PC geschützt hat, klicke auf
 **Weitere Informationen** > **Trotzdem ausführen**.
 
-**Mac** (beim ersten Mal im Terminal, im Download-Ordner):
+**Mac:** Öffne `wa2html-macos-arm64.dmg`, ziehe **wa2html** auf **Programme** und öffne es dann über
+Programme oder das Launchpad. Die App ist nicht von Apple signiert, deshalb öffnet macOS sie beim
+ersten Mal nicht. Gehe zu **Systemeinstellungen** > **Datenschutz & Sicherheit**, klicke unter
+**Sicherheit** auf **Dennoch öffnen** und bestätige mit deinem Passwort (die Taste ist etwa eine
+Stunde nach dem ersten Versuch verfügbar). Danach öffnet sich wa2html per Doppelklick.
 
-```sh
-chmod +x wa2html-macos-arm64
-xattr -d com.apple.quarantine wa2html-macos-arm64   # das Programm ist nicht von Apple signiert
-./wa2html-macos-arm64                                # öffnet das Fenster
-```
-
-**Linux:** `chmod +x wa2html-linux-x64`, dann `./wa2html-linux-x64`.
+**Linux:** Das **AppImage** läuft auf jeder Distribution: Erlaube, die Datei als Programm
+auszuführen (in ihren **Eigenschaften** oder mit `chmod +x wa2html-linux-x64.AppImage`), und
+doppelklicke darauf; meldet es fehlendes FUSE, installiere das Paket `fuse3`. Das `.deb` und das
+`.rpm` installierst du mit der Softwareverwaltung oder mit `sudo apt install ./wa2html-linux-x64.deb`
+bzw. `sudo dnf install ./wa2html-linux-x64.rpm`; danach steht wa2html im Anwendungsmenü.
 
 **Mit Python** (3.10 oder neuer):
 `pip install https://github.com/EnriqueWood/wa2html/archive/refs/heads/main.zip`, dann
@@ -725,9 +764,11 @@ più.
 ### Download
 
 Scarica il programma dall'**[ultima versione](https://github.com/EnriqueWood/wa2html/releases/latest)**:
-`wa2html-windows-x64.exe` (Windows 10/11, 64 bit), `wa2html-macos-arm64` (Mac con chip Apple, M1 o
-successivo) oppure `wa2html-linux-x64` (Linux, 64 bit). Per il terminale di Windows c'è anche
-`wa2html-cli-windows-x64.exe`. I Mac Intel e gli altri sistemi possono usare wa2html con Python
+`wa2html-windows-x64.exe` (Windows 10/11, 64 bit), `wa2html-macos-arm64.dmg` (Mac con chip Apple,
+M1 o successivo), `wa2html-linux-x64.AppImage` (Linux, 64 bit, qualsiasi distribuzione) oppure i
+pacchetti `wa2html-linux-x64.deb` (Ubuntu, Debian, Linux Mint...) e `wa2html-linux-x64.rpm` (Fedora,
+openSUSE...). Per il terminale ci sono anche `wa2html-cli-windows-x64.exe` (Windows) e
+`wa2html-linux-x64` (Linux). I Mac Intel e gli altri sistemi possono usare wa2html con Python
 (vedi sotto).
 
 ### Passo 1: esporta la chat da WhatsApp
@@ -772,15 +813,17 @@ cambia in alto a destra.
 programma non è firmato; se Windows avvisa di aver protetto il PC, fai clic su
 **Ulteriori informazioni** > **Esegui comunque**.
 
-**Mac** (la prima volta, nel Terminale, nella cartella del download):
+**Mac:** apri `wa2html-macos-arm64.dmg`, trascina **wa2html** su **Applicazioni** e aprilo da
+Applicazioni o dal Launchpad. L'app non è firmata da Apple, quindi la prima volta macOS non la apre.
+Vai in **Impostazioni di Sistema** > **Privacy e sicurezza** e, in **Sicurezza**, fai clic su
+**Apri comunque** e conferma con la password (il pulsante resta disponibile per circa un'ora dopo il
+primo tentativo). Da quel momento si apre con un doppio clic.
 
-```sh
-chmod +x wa2html-macos-arm64
-xattr -d com.apple.quarantine wa2html-macos-arm64   # il programma non è firmato da Apple
-./wa2html-macos-arm64                                # apre la finestra
-```
-
-**Linux:** `chmod +x wa2html-linux-x64`, poi `./wa2html-linux-x64`.
+**Linux:** l'**AppImage** funziona su qualsiasi distribuzione: consenti di eseguire il file come
+programma (nelle sue **Proprietà** o con `chmod +x wa2html-linux-x64.AppImage`) e fai doppio clic;
+se segnala che manca FUSE, installa il pacchetto `fuse3`. Il `.deb` e il `.rpm` si installano con
+l'installer dei programmi o con `sudo apt install ./wa2html-linux-x64.deb` /
+`sudo dnf install ./wa2html-linux-x64.rpm`; poi wa2html compare nel menu delle applicazioni.
 
 **Con Python** (3.10 o successivo):
 `pip install https://github.com/EnriqueWood/wa2html/archive/refs/heads/main.zip`, poi
