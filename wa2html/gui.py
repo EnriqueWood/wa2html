@@ -771,18 +771,26 @@ def run_until(root, condition: Callable[[], bool], timeout: float) -> bool:
     return met[0]
 
 
-def selftest(export: Path, timeout: float = 300.0) -> int:
+def selftest(export: Path, timeout: float = 300.0, master=None) -> int:
     """Drive the window without a person: choose `export`, create the page, check it.
 
     Used by the release workflow to make sure each executable can show its
     window (Tk is bundled) and convert through it. The result is the exit
     code (the window-only Windows program has no console to print to).
+    `master`: an existing Tk root to open the window in (tests), so the process
+    keeps a single Tcl interpreter; creating and destroying several crashes
+    Tk on macOS.
     """
     def say(text: str) -> None:
         if sys.stdout is not None:
             print(text)
 
-    root = _make_root()
+    if master is not None:
+        import tkinter
+
+        root = tkinter.Toplevel(master)
+    else:
+        root = _make_root()
     if root is None:
         say("gui selftest: no window can be opened (no display or no Tk)")
         return 1

@@ -74,10 +74,31 @@ class Preview(unittest.TestCase):
 
 
 class Window(unittest.TestCase):
+    # One Tk interpreter for all window tests: creating and destroying a Tk() per
+    # test made the process crash (segfault) on macOS. Each test gets a Toplevel.
+    tk_root = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tk_root = make_root()
+        if cls.tk_root is None:
+            raise unittest.SkipTest("no display available for Tk")
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.tk_root is not None:
+            cls.tk_root.destroy()
+            cls.tk_root = None
+
+    def new_window(self):
+        import tkinter
+
+        window = tkinter.Toplevel(self.tk_root)
+        window.withdraw()
+        return window
+
     def setUp(self):
-        self.root = make_root()
-        if self.root is None:
-            self.skipTest("no display available for Tk")
+        self.root = self.new_window()
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
         self.zip = make_zip(self.tmp / "WhatsApp Chat - Bob.zip", IOS_CHAT, IOS_FILES)
@@ -88,9 +109,12 @@ class Window(unittest.TestCase):
         import gc
 
         self.env.stop()
-        for job in self.root.tk.call("after", "info"):  # pending callbacks of the windows under test
-            self.root.after_cancel(job)
-        self.root.destroy()
+        # Cancel pending callbacks at the Tcl level only: their Python commands are
+        # deleted by the window that registered them when it is destroyed.
+        for job in self.tk_root.tk.call("after", "info"):
+            self.tk_root.tk.call("after", "cancel", job)
+        if self.root.winfo_exists():
+            self.root.destroy()
         gc.collect()  # finalize this test's Tk objects here, on the main thread
         self._tmp.cleanup()
 
@@ -143,8 +167,9 @@ class Window(unittest.TestCase):
         app.set_language("de" if app.lang != "de" else "it")
         saved = json.loads(gui.settings_path().read_text(encoding="utf-8"))["lang"]
         self.assertEqual(saved, app.lang)
+        app.close()
         self.root.destroy()
-        self.root = make_root()
+        self.root = self.new_window()
         self.assertEqual(gui.App(self.root, popups=False).lang, saved)
 
     def test_completion_message(self):
@@ -262,11 +287,9 @@ class Window(unittest.TestCase):
         self.assertIn("WhatsApp export", app.status_label["text"])
 
     def test_selftest(self):
-        self.root.destroy()
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            code = gui.selftest(self.zip)
-        self.root = make_root()  # for tearDown
+            code = gui.selftest(self.zip, master=self.tk_root)
         self.assertEqual(code, 0, out.getvalue())
         self.assertIn("gui selftest passed", out.getvalue())
 
