@@ -33,9 +33,14 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y xvfb
       - name: Run the test suite
         shell: bash
+        env:
+          PYTHONUNBUFFERED: "1"
         run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            xvfb-run -a python -m unittest discover -s tests -t . -v
-          else
-            python -m unittest discover -s tests -t . -v
-          fi
+          set -o pipefail
+          display=""
+          if [ "$RUNNER_OS" = "Linux" ]; then display="xvfb-run -a"; fi
+          $display python -m unittest discover -s tests -t . -v 2>&1 | tee test-output.txt
+      - name: Show the end of the test output as an annotation
+        if: failure()
+        shell: bash
+        run: python .github/scripts/annotate_tail.py test-output.txt
