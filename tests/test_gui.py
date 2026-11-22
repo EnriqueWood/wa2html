@@ -86,10 +86,13 @@ class Window(unittest.TestCase):
         self.env.start()
 
     def tearDown(self):
+        import gc
+
         self.env.stop()
         for job in self.root.tk.call("after", "info"):  # pending callbacks of the windows under test
             self.root.after_cancel(job)
         self.root.destroy()
+        gc.collect()  # finalize this test's Tk objects here, on the main thread
         self._tmp.cleanup()
 
     def wait(self, condition, timeout=60):
@@ -210,6 +213,48 @@ class Window(unittest.TestCase):
         self.assertEqual(gui.App(self.root, popups=False).my_avatar, mine)
         app.remove_my_avatar()
         self.assertNotIn("my_avatar", gui.load_settings())
+
+    def test_tk_objects_are_finalized_on_the_main_thread(self):
+        # Tk must only be used from the main thread; on macOS a font or variable
+        # finalized by a garbage collection inside the worker thread froze the window.
+        import gc
+        import threading
+        import tkinter
+        import tkinter.font
+
+        on_main = []
+
+        def spy(original):
+            def finalizer(obj):
+                on_main.append(threading.current_thread() is threading.main_thread())
+                original(obj)
+            return finalizer
+
+        with mock.patch.object(tkinter.font.Font, "__del__", spy(tkinter.font.Font.__del__)), \
+                mock.patch.object(tkinter.Variable, "__del__", spy(tkinter.Variable.__del__)), \
+                mock.patch.object(tkinter.Image, "__del__", spy(tkinter.Image.__del__)):
+            app = gui.App(self.root, lang="en", popups=False)
+            for code in i18n.LANGUAGES:  # switching language must not leave Tk objects behind
+                app.set_language(code)
+            # Garbage with Tk objects inside a reference cycle, like a closed window.
+            other = tkinter.Toplevel(self.root)
+            junk = [tkinter.StringVar(other), tkinter.font.Font(other, size=9), tkinter.PhotoImage(master=other)]
+            junk.append(junk)
+            other.destroy()
+            del junk, other
+            finished = threading.Event()
+
+            def work():
+                gc.collect()  # what the conversion's allocations trigger inside the worker
+                finished.set()
+
+            app._run_in_background(work)
+            self.assertTrue(finished.wait(10))
+            app._background_finished()
+            gc.collect()
+        self.assertTrue(on_main)
+        self.assertTrue(all(on_main), "a Tk object was finalized outside the main thread")
+        self.assertEqual(app._background, 0)
 
     def test_bad_input(self):
         app = gui.App(self.root, lang="en", popups=False)

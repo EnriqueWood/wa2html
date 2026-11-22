@@ -9,6 +9,7 @@ remembered in a small settings file.
 from __future__ import annotations
 
 import base64
+import gc
 import json
 import os
 import queue
@@ -168,6 +169,19 @@ class App:
         self.status: Tuple[str, bool, str] = ("", True, "")  # (text key, ok, extra)
         self.log_lines: list = []
 
+        # Tk objects with a finalizer (fonts, variables, images) are created once and
+        # kept for the life of the window. If they were dropped, Python's garbage
+        # collector could finalize them in the worker thread, and Tk must only be used
+        # from the main thread (on macOS that deadlocks the window).
+        from tkinter import font as tkfont
+
+        base = tkfont.nametofont("TkDefaultFont")
+        self.heading_font = base.copy()
+        self.heading_font.configure(size=base.cget("size") + 1, weight="bold")
+        self.title_font = base.copy()
+        self.title_font.configure(size=base.cget("size") + 6, weight="bold")
+        self.mode_var = tk.StringVar(value=self.mode)
+        self._background = 0  # worker threads running
         try:
             self._icon = tk.PhotoImage(data=base64.b64encode(icon.png(64)).decode("ascii"))
             root.iconphoto(True, self._icon)
@@ -182,7 +196,6 @@ class App:
 
     def _build(self) -> None:
         tk = self.tk
-        from tkinter import font as tkfont
         from tkinter import ttk
 
         if self.body is not None:
@@ -197,12 +210,7 @@ class App:
             scale = 1.0
         wide, narrow = int(640 * scale), int(430 * scale)
 
-        base = tkfont.nametofont("TkDefaultFont")
-        heading = base.copy()
-        heading.configure(size=base.cget("size") + 1, weight="bold")
-        title_font = base.copy()
-        title_font.configure(size=base.cget("size") + 6, weight="bold")
-        self._fonts = (heading, title_font)
+        heading, title_font = self.heading_font, self.title_font
         gray = "#5f6368"
 
         frame = ttk.Frame(self.root, padding=18)
@@ -281,7 +289,7 @@ class App:
         )
         row += 1
         ttk.Label(frame, text=self.t["save_as"]).grid(row=row, column=0, sticky="nw", pady=3, padx=(0, 12))
-        self.mode_var = tk.StringVar(value=self.mode)
+        self.mode_var.set(self.mode)
         modes = ttk.Frame(frame)
         modes.grid(row=row, column=1, columnspan=2, sticky="w", pady=3)
         for value in ("single", "folder"):
@@ -426,7 +434,22 @@ class App:
     # -- background work ------------------------------------------------------
 
     def _run_in_background(self, work: Callable[[], None]) -> None:
+        """Run `work` in a thread, with the garbage collector unable to touch Tk objects.
+
+        Pending garbage is collected here, in the main thread, and everything that
+        exists is frozen until the work ends, so a collection triggered inside the
+        worker never finalizes a Tk object there (Tk must stay on the main thread).
+        """
+        if self._background == 0:
+            gc.collect()
+            gc.freeze()
+        self._background += 1
         threading.Thread(target=work, daemon=True).start()
+
+    def _background_finished(self) -> None:
+        self._background = max(0, self._background - 1)
+        if self._background == 0:
+            gc.unfreeze()
 
     def _poll(self) -> None:
         try:
@@ -456,6 +479,7 @@ class App:
         self.log.configure(state="disabled")
 
     def _on_preview(self, path: Path, preview: Optional[Preview], error: Optional[str]) -> None:
+        self._background_finished()
         if path != self.input:
             return  # a newer choice replaced this one
         self.busy = False
@@ -467,6 +491,7 @@ class App:
         self._refresh()
 
     def _on_done(self, outcome: Outcome) -> None:
+        self._background_finished()
         self.busy = False
         self.outcome = outcome
         self.status = ("ok", True, "") if outcome.code == 0 and outcome.verified else ("failed", False, "")
