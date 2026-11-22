@@ -608,7 +608,7 @@ la taille du texte, le format de l'heure et la langue. Toutes les options de la 
 wa2html macht aus einem exportierten WhatsApp-Chat **eine einzige HTML-Datei, die wie WhatsApp
 aussieht und funktioniert**: Sprachnachrichten laufen direkt im Browser, Fotos, Sticker und Videos
 erscheinen im Verlauf, und man kann suchen, zu einem Datum springen sowie Hintergrund und Farben
-ändern. Ohne App, ohne Konto und ohne Internet – so bleibt das Gespräch über Jahre lesbar.
+ändern. Ohne App, ohne Konto und ohne Internet: So bleibt das Gespräch über Jahre lesbar.
 
 Entstanden ist es, um wichtige Chats zu bewahren, etwa das Gespräch mit einem geliebten Menschen,
 der nicht mehr da ist.
